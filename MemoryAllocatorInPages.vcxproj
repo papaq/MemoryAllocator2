@@ -148,10 +148,12 @@
     <ClCompile Include="Allocator.c">
       <FileType>CppCode</FileType>
     </ClCompile>
+    <ClCompile Include="ConsoleOutput.c" />
     <ClCompile Include="MemoryAllocatorInPages.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Allocator.h" />
+    <ClInclude Include="ConsoleOutput.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

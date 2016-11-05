@@ -3,42 +3,33 @@
 #include <math.h>
 
 int make_descriptor(bool class_type, int num);
+int make_class_header(int class_size, int busy_bytes);
 
 int fill_class_descriptor(int num, int size);
 
-int fill_nonclass_descriptor(int num, int next_pages);
+int fill_nonclass_descriptor(int num, int pages_in_block);
+
+
+void set_head_bit(int * value);
+void set_page_num(int * descr, int num);
+void set_type_class(int * descr, bool class_type);
 
 // For non-class pages
 void set_busy(int * descr, bool busy);
-int get_busy(int descr);
-
 void set_pages_in_block(int * descr, int num);
-int get_pages_in_block(int descr);
 
 // For class pages
 void set_size_of_class(int * descr, int size);
-int get_size_of_class(int descr);
-
 void set_left_blocks(int * descr, int left);
-int get_left_blocks(int descr);
-
 void set_pointer_to_block(int * descr, void * pointer);
-void * get_pointer_to_block(int descr);
-
-
-void set_page_num(int * descr, int num);
-int get_page_num(int descr);
-
-void set_type(int * descr, bool class_type);
-int get_type(int descr);
 
 
 void shift_left(int * what, int n);
 void shift_right(int * what, int n);
 
+void set_busy_bytes(int * header, int busy_bytes);
 
 void fill_classes_with_pointers(void * page_ptr, int blocks, int size);
-
 
 void * mem_alloc(size_t size)
 {
@@ -58,16 +49,16 @@ void mem_free(void * addr)
 {
 }
 
+//********************************************************************************************
 int make_descriptor(bool class_type, int num)
 {
-	int header = 1;
+	int descr = 0;
 
 	// 1 in the first byte of header points to its origin
-	shift_left(&header, 24);
-	int descr = header;
+	set_head_bit(&descr);
 
 	// Set bit pointing at page type
-	set_type(&descr, class_type);
+	set_type_class(&descr, class_type);
 
 	// Set number of page
 	set_page_num(&descr, num);
@@ -87,11 +78,12 @@ int fill_class_descriptor(int num, int size)
 	return descr;
 }
 
-int fill_nonclass_descriptor(int num, int next_pages)
+//***************************************************************************************************
+int fill_nonclass_descriptor(int num, int pages_in_block)
 {
 	int descr = make_descriptor(false, num);
 	set_busy(&descr, false);
-	set_pages_in_block(&descr, next_pages);
+	set_pages_in_block(&descr, pages_in_block);
 	return descr;
 }
 
@@ -102,34 +94,50 @@ void set_busy(int * descr, bool busy)
 	*descr += if_busy;
 }
 
-int get_busy(int descr)
+bool get_busy(int descr)
 {
 	shift_right(&descr, 22);
-	return descr & 1;
+	int busy = descr & 1;
+	return true ? busy == 1 : false;
 }
 
 void set_pages_in_block(int * descr, int num)
 {
-	shift_left(&num, 15);
+	shift_left(&num, 14);
 	*descr += num;
 }
 
 int get_pages_in_block(int descr)
 {
-	shift_right(&descr, 15);
-	return descr & 127;
+	shift_right(&descr, 14);
+	return descr & 255;
 }
 
 void set_size_of_class(int * descr, int size)
 {
-	shift_left(&size, 20);
-	*descr += size;
+	int pow = -4;
+	while (size % 2 == 0)
+	{
+		pow++;
+		size = size / 2;
+	}
+
+	shift_left(&pow, 20);
+	*descr += pow;
 }
 
 int get_size_of_class(int descr)
 {
 	shift_right(&descr, 20);
-	return descr & 7;
+	int pow = descr & 7 + 4;
+	int size = 1;
+
+	for (int i = 0; i < pow; i++)
+	{
+		size *= 2;
+	}
+
+	return size;
 }
 
 void set_left_blocks(int * descr, int left)
@@ -164,6 +172,19 @@ void * get_pointer_to_block(int descr)
 	return (void *)pointer;
 }
 
+void set_head_bit(int * value)
+{
+	int head = 1;
+	shift_left(&head, 24);
+	*value += head;
+}
+
+int get_head_bit(int value)
+{
+	shift_left(&value, 24);
+	return value & 8;
+}
+
 void set_page_num(int * descr, int num)
 {
 	*descr += num;
@@ -174,17 +195,18 @@ int get_page_num(int descr)
 	return descr & 127;
 }
 
-void set_type(int * descr, bool class_type)
+void set_type_class(int * descr, bool class_type)
 {
 	int type = class_type;
 	shift_left(&type, 23);
 	*descr += type;
 }
 
-int get_type(int descr)
+bool get_type_class(int descr)
 {
 	shift_right(&descr, 23);
-	return descr & 1;
+	int type_class = descr & 1;
+	return true ? type_class == 1 : false;
 }
 
 void shift_left(int * what, int n)
@@ -195,6 +217,21 @@ void shift_left(int * what, int n)
 void shift_right(int * what, int n)
 {
 	*what = *what >> n;
+}
+
+void set_busy_bytes(int * header, int busy_bytes)
+{
+	int free_bytes = get_size_of_class(*header) - busy_bytes;
+	shift_left(&free_bytes, 17);
+	*header += free_bytes;
+}
+
+int get_busy_bytes(int header)
+{
+	int size_of_class = get_size_of_class(header);
+	shift_right(&header, 17);
+	int free_bytes = header & 4;
+	return size_of_class - free_bytes;
 }
 
 void fill_classes_with_pointers(void * page_ptr, int blocks, int size)
@@ -209,12 +246,21 @@ void fill_classes_with_pointers(void * page_ptr, int blocks, int size)
 	*this_block = (int)NULL;
 }
 
+int make_class_header(int class_size, int busy_bytes)
+{
+	int header = 0;
+	set_head_bit(&header);
+	set_size_of_class(&header, class_size);
+	set_busy_bytes(&header, busy_bytes);
+
+	return header;
+}
+
 void init_pages()
 {
-	int * page_ptr = global_mem;
+	// Init all pages as non-class by default
 	for (int i = 0; i < PAGE_NUM; i++)
 	{
-		*page_ptr = fill_nonclass_descriptor(i, 0);
-		page_ptr += PAGE_SIZE / sizeof(int);
+		descriptors[i] = fill_nonclass_descriptor(i, 1);
 	}
 }
