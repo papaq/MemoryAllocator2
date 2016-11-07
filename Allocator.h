@@ -1,7 +1,7 @@
 #pragma once
 
 #define PAGE_SIZE 1024
-#define PAGE_NUM 6
+#define PAGE_NUM 8
 #define MEM_SIZE PAGE_SIZE * PAGE_NUM
 
 #include <stdio.h>
@@ -44,7 +44,7 @@ int get_size_of_class(int descr);
 int get_left_blocks(int descr);
 
 // Get pointer to first free block
-void * get_pointer_to_block(int descr);
+void * get_pointer_to_block(int descr, int * ptr_to_page);
 
 // Get busy bytes of the class
 int get_busy_bytes(int header);
